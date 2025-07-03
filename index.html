@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<!-- 語言屬性會動態變更 -->
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 標題會動態變更 -->
+    <title>智慧型 JSON/XML 報表產生器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .hidden { display: none !important; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6; color: #333; max-width: 1200px;
+            margin: 20px auto; padding: 0 20px; background-color: #f4f7f6;
+        }
+
+        /* << 新增：主標題和語言切換按鈕的容器 >> */
+        .header-container {
+            position: relative;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 { color: #2c3e50; margin: 0; }
+        #lang-toggle-btn {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            padding: 5px 12px;
+            font-size: 0.9em;
+            background-color: #7f8c8d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #lang-toggle-btn:hover { background-color: #95a5a6; }
+        
+        h2 { color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; text-align: center; }
+        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 20px; }
+        .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #drop-area { border: 2px dashed #bdc3c7; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; background-color: #fff; transition: background-color 0.3s, border-color 0.3s; margin-bottom: 20px; }
+        #drop-area.highlight { border-color: #3498db; background-color: #ecf5ff; }
+        #file-input { display: none; }
+        .content-box { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        #post-load-controls { text-align: center; }
+        #generate-btn { padding: 12px 25px; font-size: 1.1em; color: #fff; background-color: #3498db; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; margin-top: 10px; }
+        .table-actions-container { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 20px; margin-bottom: 20px; }
+        .table-search-controls { display: flex; gap: 10px; flex-grow: 1; min-width: 300px; }
+        #search-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        #search-btn, #export-btn { padding: 10px 20px; font-size: 1em; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+        #search-btn { background-color: #3498db; }
+        #export-btn { background-color: #27ae60; }
+        #export-btn:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        #filter-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
+        .filter-control label { margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #34495e; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .filter-control select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #bdc3c7; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; overflow-wrap: break-word; word-break: break-word; }
+        th.sortable { cursor: pointer; } th.sortable:hover { background-color: #e9e9e9; }
+        th.sortable::after { content: ''; display: inline-block; width: 1em; text-align: center; margin-left: 5px; opacity: 0.5; }
+        th.sort-asc::after { content: '▲'; opacity: 1; } th.sort-desc::after { content: '▼'; opacity: 1; }
+    </style>
+</head>
+<body>
+    <div id="loader" class="hidden"><div class="spinner"></div><p data-lang-key="loaderText">資料處理中，請稍候...</p></div>
+
+    <div class="header-container">
+        <h1 data-lang-key="pageTitle">智慧型 JSON/XML 報表產生器</h1>
+        <button id="lang-toggle-btn">English</button>
+    </div>
+    
+    <div id="drop-area">
+        <input type="file" id="file-input" accept=".json, .xml">
+        <p data-lang-key="dropAreaPrompt">拖曳 JSON 或 XML 檔案到這裡，或點擊選擇檔案</p>
+    </div>
+    
+    <div id="post-load-controls" class="content-box hidden">
+        <p id="file-status"></p>
+        <button id="generate-btn" data-lang-key="generateBtn">生成報表與篩選器</button>
+    </div>
+
+    <div id="main-content" class="hidden">
+        <div class="content-box">
+            <h2 data-lang-key="filterTitle">欄位篩選器</h2>
+            <div id="filter-container"></div>
+        </div>
+        <div class="content-box">
+            <h2 data-lang-key="tableTitle">資料表格</h2>
+            <div class="table-actions-container">
+                <div class="table-search-controls">
+                    <input type="text" id="search-input" data-lang-key="searchInputPlaceholder">
+                    <button id="search-btn" data-lang-key="searchBtn">送出查詢</button>
+                </div>
+                <button id="export-btn" disabled data-lang-key="exportBtn">匯出為 Excel</button>
+            </div>
+            <div id="table-container"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // << 新增：語言字典 >>
+            const translations = {
+                'zh': {
+                    pageTitle: '智慧型 JSON/XML 報表產生器',
+                    toggleLangBtn: 'English',
+                    dropAreaPrompt: '拖曳 JSON 或 XML 檔案到這裡，或點擊選擇檔案',
+                    generateBtn: '生成報表與篩選器',
+                    filterTitle: '欄位篩選器',
+                    tableTitle: '資料表格',
+                    searchInputPlaceholder: '對篩選後的結果進行關鍵字查詢...',
+                    searchBtn: '送出查詢',
+                    exportBtn: '匯出為 Excel',
+                    loaderText: '資料處理中，請稍候...',
+                    allOption: '-- 全部 --',
+                    noData: '沒有符合條件的資料。',
+                    fileTypeError: '錯誤：請上傳 JSON 或 XML 格式的檔案！',
+                    largeFileConfirm: (size) => `您選擇的檔案大小為 ${size} MB，載入與處理可能需要較長時間。\n\n確定要繼續嗎？`,
+                    fileParseError: (msg) => `檔案處理失敗：\n${msg}`,
+                    fileReadError: '讀取檔案時發生錯誤！',
+                    buildError: (msg) => `生成報表時發生錯誤：\n${msg}`,
+                    fileLoaded: (name, count) => `檔案 "${name}" 已成功載入 (${count} 筆資料)。`
+                },
+                'en': {
+                    pageTitle: 'Intelligent JSON/XML Report Generator',
+                    toggleLangBtn: '中文',
+                    dropAreaPrompt: 'Drag & drop a JSON or XML file here, or click to select',
+                    generateBtn: 'Generate Report & Filters',
+                    filterTitle: 'Column Filters',
+                    tableTitle: 'Data Table',
+                    searchInputPlaceholder: 'Search keyword in filtered results...',
+                    searchBtn: 'Search',
+                    exportBtn: 'Export to Excel',
+                    loaderText: 'Processing data, please wait...',
+                    allOption: '-- All --',
+                    noData: 'No data matches the criteria.',
+                    fileTypeError: 'Error: Please upload a JSON or XML file!',
+                    largeFileConfirm: (size) => `The selected file is ${size} MB, which may take a long time to load and process.\n\nAre you sure you want to continue?`,
+                    fileParseError: (msg) => `File processing failed:\n${msg}`,
+                    fileReadError: 'An error occurred while reading the file!',
+                    buildError: (msg) => `An error occurred while building the report:\n${msg}`,
+                    fileLoaded: (name, count) => `File "${name}" loaded successfully (${count} records).`
+                }
+            };
+            let currentLang = 'zh';
+
+            // DOM 元素...
+            const langToggleBtn = document.getElementById('lang-toggle-btn');
+            const allLangElements = document.querySelectorAll('[data-lang-key]');
+            // ...其他元素...
+            const dropArea = document.getElementById('drop-area'); const fileInput = document.getElementById('file-input'); const loader = document.getElementById('loader'); const postLoadControls = document.getElementById('post-load-controls'); const fileStatus = document.getElementById('file-status'); const generateBtn = document.getElementById('generate-btn'); const mainContent = document.getElementById('main-content'); const searchInput = document.getElementById('search-input'); const searchBtn = document.getElementById('search-btn'); const exportBtn = document.getElementById('export-btn'); const filterContainer = document.getElementById('filter-container'); const tableContainer = document.getElementById('table-container');
+
+            // 狀態管理...
+            let originalData = [], currentViewData = [], headers = [], sortState = { column: null, direction: 'none' };
+            const LARGE_FILE_THRESHOLD = 1 * 1024 * 1024;
+
+            // << 新增：語言切換函式 >>
+            function setLanguage(lang) {
+                if (!translations[lang]) return;
+                currentLang = lang;
+                const dict = translations[lang];
+
+                document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
+                document.title = dict.pageTitle;
+                
+                allLangElements.forEach(el => {
+                    const key = el.getAttribute('data-lang-key');
+                    if (dict[key]) {
+                        if (el.tagName === 'INPUT' && el.placeholder !== undefined) {
+                            el.placeholder = dict[key];
+                        } else {
+                            el.textContent = dict[key];
+                        }
+                    }
+                });
+                langToggleBtn.textContent = dict.toggleLangBtn;
+                // 需要重新渲染下拉選單和表格中的文字
+                if (originalData.length > 0) {
+                   renderFilters();
+                   renderTable();
+                }
+            }
+            
+            // 事件監聽
+            langToggleBtn.addEventListener('click', () => {
+                const newLang = currentLang === 'zh' ? 'en' : 'zh';
+                setLanguage(newLang);
+            });
+            // ...其他事件監聽...
+            dropArea.addEventListener('click', () => fileInput.click()); fileInput.addEventListener('change', (e) => handleFile(e.target.files[0])); dropArea.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0])); ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e=>dropArea.addEventListener(e,p=>{p.preventDefault();p.stopPropagation();})); ['dragenter', 'dragover'].forEach(e=>dropArea.addEventListener(e,()=>dropArea.classList.add('highlight'))); ['dragleave', 'drop'].forEach(e=>dropArea.addEventListener(e,()=>dropArea.classList.remove('highlight'))); generateBtn.addEventListener('click', buildUI); exportBtn.addEventListener('click', exportToExcel); searchBtn.addEventListener('click', updateView); searchInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); updateView(); } });
+
+            // << 修改：所有顯示文字的函式都從字典取值 >>
+            function parseXmlToObjects(xmlString) { /* ... 保持不變 ... */ }
+            function handleFile(file) {
+                if (!file) return;
+                const dict = translations[currentLang];
+                const isJson = file.type === 'application/json' || file.name.toLowerCase().endsWith('.json');
+                const isXml = file.type === 'application/xml' || file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml');
+                if (!isJson && !isXml) { alert(dict.fileTypeError); fileInput.value = ''; return; }
+                if (file.size > LARGE_FILE_THRESHOLD) {
+                    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+                    if (!confirm(dict.largeFileConfirm(fileSizeMB))) { fileInput.value = ''; return; }
+                }
+                showLoader(true);
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    setTimeout(() => {
+                        try {
+                            let data;
+                            if (isJson) { data = JSON.parse(event.target.result); } 
+                            else { data = parseXmlToObjects(event.target.result); }
+                            if (!Array.isArray(data) || data.length === 0) throw new Error('檔案內容無法轉換為有效的資料列表。');
+                            prepareForGeneration(data, file.name);
+                        } catch (e) { alert(dict.fileParseError(e.message)); } 
+                        finally { showLoader(false); }
+                    }, 10);
+                };
+                reader.onerror = () => { showLoader(false); alert(dict.fileReadError); };
+                reader.readAsText(file, 'UTF-8');
+            }
+            function prepareForGeneration(data, fileName) {
+                originalData = data;
+                mainContent.classList.add('hidden');
+                postLoadControls.classList.remove('hidden');
+                fileStatus.textContent = translations[currentLang].fileLoaded(fileName, originalData.length);
+                generateBtn.disabled = false;
+            }
+            function buildUI() {
+                showLoader(true);
+                setTimeout(() => {
+                    try {
+                        headers = Object.keys(originalData[0]);
+                        sortState = { column: null, direction: 'none' };
+                        searchInput.value = '';
+                        renderFilters(); updateView();
+                        mainContent.classList.remove('hidden');
+                        postLoadControls.classList.add('hidden');
+                    } catch (e) { alert(translations[currentLang].buildError(e.message)); } 
+                    finally { showLoader(false); }
+                }, 10);
+            }
+            function renderFilters() {
+                filterContainer.innerHTML = '';
+                const allOptionText = translations[currentLang].allOption;
+                headers.forEach(header => {
+                    const uniqueValues = [...new Set(originalData.map(item => item[header]))].filter(v => v != null).sort((a, b) => String(a).localeCompare(String(b), 'zh-Hant'));
+                    const control = document.createElement('div');
+                    control.className = 'filter-control';
+                    control.innerHTML = `<label for="filter-${header}" title="${header}">${header}</label>
+                        <select id="filter-${header}" data-column="${header}"><option value="">${allOptionText}</option>
+                        ${uniqueValues.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}</select>`;
+                    control.querySelector('select').addEventListener('change', updateView);
+                    filterContainer.appendChild(control);
+                });
+            }
+            function renderTable() {
+                tableContainer.innerHTML = '';
+                exportBtn.disabled = currentViewData.length === 0;
+                if (currentViewData.length === 0) {
+                    tableContainer.innerHTML = `<p style="text-align:center; color:#999; font-style:italic;">${translations[currentLang].noData}</p>`;
+                    return;
+                }
+                const table = document.createElement('table');
+                table.createTHead().insertRow(); table.createTBody();
+                const headerRow = table.tHead.rows[0];
+                headers.forEach(header => {
+                    const th = document.createElement('th');
+                    th.className = 'sortable'; th.textContent = header;
+                    if (sortState.column === header) th.classList.add(`sort-${sortState.direction}`);
+                    th.addEventListener('click', () => handleSort(header));
+                    headerRow.appendChild(th);
+                });
+                currentViewData.forEach(rowObject => {
+                    const row = table.tBodies[0].insertRow();
+                    headers.forEach(header => {
+                        const cell = row.insertCell(); cell.textContent = rowObject[header] ?? "";
+                    });
+                });
+                tableContainer.appendChild(table);
+            }
+            // ...其他函式保持不變...
+            function parseXmlToObjects(xmlString) { const parser = new DOMParser(); const xmlDoc = parser.parseFromString(xmlString, "application/xml"); if (xmlDoc.getElementsByTagName("parsererror").length) { throw new Error("XML 檔案格式錯誤，無法解析。"); } const allTags = xmlDoc.getElementsByTagName('*'); const tagCounts = {}; for (let i = 0; i < allTags.length; i++) { const tagName = allTags[i].tagName; tagCounts[tagName] = (tagCounts[tagName] || 0) + 1; } let recordTagName = ''; let maxCount = 0; for (const tagName in tagCounts) { if (tagCounts[tagName] > 1 && tagCounts[tagName] > maxCount) { maxCount = tagCounts[tagName]; recordTagName = tagName; } } if (!recordTagName) { const rootChildren = xmlDoc.documentElement.children; if (rootChildren.length > 0) { recordTagName = rootChildren[0].tagName; } else { throw new Error("XML 檔案中找不到任何資料紀錄。"); } } const records = xmlDoc.getElementsByTagName(recordTagName); if (records.length === 0) { throw new Error("無法根據自動偵測找到有效的資料列。"); } const dataArray = Array.from(records).map(recordNode => { const obj = {}; const fields = Array.from(recordNode.children); fields.forEach(fieldNode => { obj[fieldNode.tagName] = fieldNode.textContent.trim(); }); return obj; }).filter(obj => Object.keys(obj).length > 0); if (dataArray.length === 0) { throw new Error("無法從 XML 檔案中提取任何有效的資料。"); } return dataArray; }
+            function showLoader(show) { show ? loader.classList.remove('hidden') : loader.classList.add('hidden'); }
+            function escapeHtml(unsafe) { if (typeof unsafe !== 'string') return unsafe; return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+            function updateView() { let filteredData = [...originalData]; filterContainer.querySelectorAll('select').forEach(select => { if (select.value !== "") { const column = select.dataset.column; const value = select.value; filteredData = filteredData.filter(row => String(row[column]) === value); } }); const searchTerm = searchInput.value.toLowerCase().trim(); if (searchTerm) { filteredData = filteredData.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(searchTerm))); } currentViewData = filteredData; applySort(); renderTable(); }
+            function handleSort(column) { const currentDirection = sortState.column === column ? sortState.direction : 'none'; sortState = { column, direction: currentDirection === 'asc' ? 'desc' : 'asc' }; applySort(); renderTable(); }
+            function applySort() { const { column, direction } = sortState; if (!column) return; currentViewData.sort((a, b) => { const valA = a[column], valB = b[column]; if (valA == null) return 1; if (valB == null) return -1; const comparison = typeof valA === 'number' && typeof valB === 'number' ? valA - valB : String(valA).localeCompare(String(valB), 'zh-Hant'); return direction === 'asc' ? comparison : -comparison; }); }
+            function exportToExcel() { if (currentViewData.length === 0) return; const ws = XLSX.utils.json_to_sheet(currentViewData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "篩選結果"); XLSX.writeFile(wb, `export_${new Date().toISOString().slice(0,10)}.xlsx`); }
+        });
+    </script>
+</body>
+</html>
