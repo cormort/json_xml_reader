@@ -1,11 +1,9 @@
 <!DOCTYPE html>
-<!-- 語言屬性會動態變更 -->
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- 標題會動態變更 -->
-    <title>智慧型 JSON/XML 報表產生器</title>
+    <title>智慧型 JSON/XML/CSV 報表產生器</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         .hidden { display: none !important; }
@@ -15,7 +13,7 @@
             margin: 20px auto; padding: 0 20px; background-color: #f4f7f6;
         }
 
-        /* << 新增：主標題和語言切換按鈕的容器 >> */
+        /* 主標題和語言切換按鈕的容器 */
         .header-container {
             position: relative;
             text-align: center;
@@ -48,13 +46,59 @@
         .content-box { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
         #post-load-controls { text-align: center; }
         #generate-btn { padding: 12px 25px; font-size: 1.1em; color: #fff; background-color: #3498db; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; margin-top: 10px; }
-        .table-actions-container { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 20px; margin-bottom: 20px; }
-        .table-search-controls { display: flex; gap: 10px; flex-grow: 1; min-width: 300px; }
+        
+        /* 修改此處：調整 table-actions-container 的佈局以容納多個匯出按鈕 */
+        .table-actions-container {
+            display: flex;
+            flex-direction: column; /* 讓內容垂直排列 */
+            gap: 15px; /* 按鈕間距 */
+            margin-top: 20px;
+            margin-bottom: 20px;
+            align-items: center; /* 水平居中 */
+        }
+
+        .table-search-controls {
+            display: flex;
+            gap: 10px;
+            width: 100%; /* 佔滿可用寬度 */
+            max-width: 600px; /* 限制最大寬度，避免過寬 */
+        }
         #search-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        #search-btn, #export-btn { padding: 10px 20px; font-size: 1em; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
-        #search-btn { background-color: #3498db; }
-        #export-btn { background-color: #27ae60; }
-        #export-btn:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        #search-btn {
+            padding: 10px 20px; font-size: 1em; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;
+            background-color: #3498db;
+        }
+
+        /* 匯出按鈕群組 */
+        .export-buttons-group {
+            display: flex;
+            flex-wrap: wrap; /* 允許換行 */
+            gap: 10px; /* 按鈕間距 */
+            justify-content: center; /* 居中對齊 */
+            width: 100%;
+        }
+
+        /* 統一匯出按鈕樣式 */
+        .export-buttons-group button {
+            padding: 10px 20px;
+            font-size: 1em;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-grow: 1; /* 讓按鈕在空間允許下等寬延伸 */
+            max-width: 180px; /* 限制單個按鈕最大寬度 */
+            transition: background-color 0.3s;
+        }
+
+        #export-excel-btn { background-color: #27ae60; } /* Excel 綠色 */
+        #export-csv-btn { background-color: #f39c12; } /* CSV 橘色 */
+        #export-json-btn { background-color: #e74c3c; } /* JSON 紅色 */
+        #export-xml-btn { background-color: #9b59b6; } /* XML 紫色 */
+
+        .export-buttons-group button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+
         #filter-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
         .filter-control label { margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #34495e; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .filter-control select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #bdc3c7; }
@@ -66,16 +110,19 @@
     </style>
 </head>
 <body>
-    <div id="loader" class="hidden"><div class="spinner"></div><p data-lang-key="loaderText">資料處理中，請稍候...</p></div>
+    <div id="loader" class="hidden">
+        <div class="spinner"></div>
+        <p data-lang-key="loaderText">資料處理中，請稍候...</p>
+    </div>
 
     <div class="header-container">
-        <h1 data-lang-key="pageTitle">智慧型 JSON/XML 報表產生器</h1>
+        <h1 data-lang-key="pageTitle">智慧型 JSON/XML/CSV 報表產生器</h1>
         <button id="lang-toggle-btn">English</button>
     </div>
     
     <div id="drop-area">
-        <input type="file" id="file-input" accept=".json, .xml">
-        <p data-lang-key="dropAreaPrompt">拖曳 JSON 或 XML 檔案到這裡，或點擊選擇檔案</p>
+        <input type="file" id="file-input" accept=".json, .xml, .csv">
+        <p data-lang-key="dropAreaPrompt">拖曳 JSON、XML 或 CSV 檔案到這裡，或點擊選擇檔案</p>
     </div>
     
     <div id="post-load-controls" class="content-box hidden">
@@ -95,7 +142,12 @@
                     <input type="text" id="search-input" data-lang-key="searchInputPlaceholder">
                     <button id="search-btn" data-lang-key="searchBtn">送出查詢</button>
                 </div>
-                <button id="export-btn" disabled data-lang-key="exportBtn">匯出為 Excel</button>
+                <div class="export-buttons-group">
+                    <button id="export-excel-btn" disabled data-lang-key="exportExcelBtn">匯出為 Excel</button>
+                    <button id="export-csv-btn" disabled data-lang-key="exportCsvBtn">匯出為 CSV</button>
+                    <button id="export-json-btn" disabled data-lang-key="exportJsonBtn">匯出為 JSON</button>
+                    <button id="export-xml-btn" disabled data-lang-key="exportXmlBtn">匯出為 XML</button>
+                </div>
             </div>
             <div id="table-container"></div>
         </div>
@@ -103,22 +155,24 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // << 新增：語言字典 >>
             const translations = {
                 'zh': {
-                    pageTitle: '智慧型 JSON/XML 報表產生器',
+                    pageTitle: '智慧型 JSON/XML/CSV 報表產生器',
                     toggleLangBtn: 'English',
-                    dropAreaPrompt: '拖曳 JSON 或 XML 檔案到這裡，或點擊選擇檔案',
+                    dropAreaPrompt: '拖曳 JSON、XML 或 CSV 檔案到這裡，或點擊選擇檔案',
                     generateBtn: '生成報表與篩選器',
                     filterTitle: '欄位篩選器',
                     tableTitle: '資料表格',
                     searchInputPlaceholder: '對篩選後的結果進行關鍵字查詢...',
                     searchBtn: '送出查詢',
-                    exportBtn: '匯出為 Excel',
+                    exportExcelBtn: '匯出為 Excel', // 修改此處：Specific Excel button text
+                    exportCsvBtn: '匯出為 CSV',
+                    exportJsonBtn: '匯出為 JSON',
+                    exportXmlBtn: '匯出為 XML',
                     loaderText: '資料處理中，請稍候...',
                     allOption: '-- 全部 --',
                     noData: '沒有符合條件的資料。',
-                    fileTypeError: '錯誤：請上傳 JSON 或 XML 格式的檔案！',
+                    fileTypeError: '錯誤：請上傳 JSON、XML 或 CSV 格式的檔案！',
                     largeFileConfirm: (size) => `您選擇的檔案大小為 ${size} MB，載入與處理可能需要較長時間。\n\n確定要繼續嗎？`,
                     fileParseError: (msg) => `檔案處理失敗：\n${msg}`,
                     fileReadError: '讀取檔案時發生錯誤！',
@@ -126,19 +180,22 @@
                     fileLoaded: (name, count) => `檔案 "${name}" 已成功載入 (${count} 筆資料)。`
                 },
                 'en': {
-                    pageTitle: 'Intelligent JSON/XML Report Generator',
+                    pageTitle: 'Intelligent JSON/XML/CSV Report Generator',
                     toggleLangBtn: '中文',
-                    dropAreaPrompt: 'Drag & drop a JSON or XML file here, or click to select',
+                    dropAreaPrompt: 'Drag & drop a JSON, XML, or CSV file here, or click to select',
                     generateBtn: 'Generate Report & Filters',
                     filterTitle: 'Column Filters',
                     tableTitle: 'Data Table',
                     searchInputPlaceholder: 'Search keyword in filtered results...',
                     searchBtn: 'Search',
-                    exportBtn: 'Export to Excel',
+                    exportExcelBtn: 'Export to Excel', // 修改此處：Specific Excel button text
+                    exportCsvBtn: 'Export to CSV',
+                    exportJsonBtn: 'Export to JSON',
+                    exportXmlBtn: 'Export to XML',
                     loaderText: 'Processing data, please wait...',
                     allOption: '-- All --',
                     noData: 'No data matches the criteria.',
-                    fileTypeError: 'Error: Please upload a JSON or XML file!',
+                    fileTypeError: 'Error: Please upload a JSON, XML, or CSV file!',
                     largeFileConfirm: (size) => `The selected file is ${size} MB, which may take a long time to load and process.\n\nAre you sure you want to continue?`,
                     fileParseError: (msg) => `File processing failed:\n${msg}`,
                     fileReadError: 'An error occurred while reading the file!',
@@ -148,17 +205,30 @@
             };
             let currentLang = 'zh';
 
-            // DOM 元素...
             const langToggleBtn = document.getElementById('lang-toggle-btn');
             const allLangElements = document.querySelectorAll('[data-lang-key]');
-            // ...其他元素...
-            const dropArea = document.getElementById('drop-area'); const fileInput = document.getElementById('file-input'); const loader = document.getElementById('loader'); const postLoadControls = document.getElementById('post-load-controls'); const fileStatus = document.getElementById('file-status'); const generateBtn = document.getElementById('generate-btn'); const mainContent = document.getElementById('main-content'); const searchInput = document.getElementById('search-input'); const searchBtn = document.getElementById('search-btn'); const exportBtn = document.getElementById('export-btn'); const filterContainer = document.getElementById('filter-container'); const tableContainer = document.getElementById('table-container');
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('file-input');
+            const loader = document.getElementById('loader');
+            const postLoadControls = document.getElementById('post-load-controls');
+            const fileStatus = document.getElementById('file-status');
+            const generateBtn = document.getElementById('generate-btn');
+            const mainContent = document.getElementById('main-content');
+            const searchInput = document.getElementById('search-input');
+            const searchBtn = document.getElementById('search-btn');
+            
+            // 獲取所有匯出按鈕的 DOM 元素
+            const exportExcelBtn = document.getElementById('export-excel-btn');
+            const exportCsvBtn = document.getElementById('export-csv-btn');
+            const exportJsonBtn = document.getElementById('export-json-btn');
+            const exportXmlBtn = document.getElementById('export-xml-btn');
 
-            // 狀態管理...
+            const filterContainer = document.getElementById('filter-container');
+            const tableContainer = document.getElementById('table-container');
+
             let originalData = [], currentViewData = [], headers = [], sortState = { column: null, direction: 'none' };
-            const LARGE_FILE_THRESHOLD = 1 * 1024 * 1024;
+            const LARGE_FILE_THRESHOLD = 1 * 1024 * 1024; // 1 MB
 
-            // << 新增：語言切換函式 >>
             function setLanguage(lang) {
                 if (!translations[lang]) return;
                 currentLang = lang;
@@ -180,48 +250,192 @@
                 langToggleBtn.textContent = dict.toggleLangBtn;
                 // 需要重新渲染下拉選單和表格中的文字
                 if (originalData.length > 0) {
-                   renderFilters();
-                   renderTable();
+                    renderFilters();
+                    renderTable();
                 }
             }
             
-            // 事件監聽
             langToggleBtn.addEventListener('click', () => {
                 const newLang = currentLang === 'zh' ? 'en' : 'zh';
                 setLanguage(newLang);
             });
-            // ...其他事件監聽...
-            dropArea.addEventListener('click', () => fileInput.click()); fileInput.addEventListener('change', (e) => handleFile(e.target.files[0])); dropArea.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0])); ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e=>dropArea.addEventListener(e,p=>{p.preventDefault();p.stopPropagation();})); ['dragenter', 'dragover'].forEach(e=>dropArea.addEventListener(e,()=>dropArea.classList.add('highlight'))); ['dragleave', 'drop'].forEach(e=>dropArea.addEventListener(e,()=>dropArea.classList.remove('highlight'))); generateBtn.addEventListener('click', buildUI); exportBtn.addEventListener('click', exportToExcel); searchBtn.addEventListener('click', updateView); searchInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); updateView(); } });
 
-            // << 修改：所有顯示文字的函式都從字典取值 >>
-            function parseXmlToObjects(xmlString) { /* ... 保持不變 ... */ }
+            dropArea.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+            dropArea.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => dropArea.addEventListener(e, p => { p.preventDefault(); p.stopPropagation(); }));
+            ['dragenter', 'dragover'].forEach(e => dropArea.addEventListener(e, () => dropArea.classList.add('highlight')));
+            ['dragleave', 'drop'].forEach(e => dropArea.addEventListener(e, () => dropArea.classList.remove('highlight')));
+            generateBtn.addEventListener('click', buildUI);
+            
+            // 為新的匯出按鈕添加事件監聽器
+            exportExcelBtn.addEventListener('click', exportToExcel);
+            exportCsvBtn.addEventListener('click', exportToCsv);
+            exportJsonBtn.addEventListener('click', exportToJson);
+            exportXmlBtn.addEventListener('click', exportToXml);
+
+            searchBtn.addEventListener('click', updateView);
+            searchInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    updateView();
+                }
+            });
+
+            function parseXmlToObjects(xmlString) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+                if (xmlDoc.getElementsByTagName("parsererror").length) {
+                    throw new Error("XML 檔案格式錯誤，無法解析。");
+                }
+
+                const allTags = xmlDoc.getElementsByTagName('*');
+                const tagCounts = {};
+                for (let i = 0; i < allTags.length; i++) {
+                    const tagName = allTags[i].tagName;
+                    tagCounts[tagName] = (tagCounts[tagName] || 0) + 1;
+                }
+
+                let recordTagName = '';
+                let maxCount = 0;
+                for (const tagName in tagCounts) {
+                    if (tagCounts[tagName] > 1 && tagCounts[tagName] > maxCount) {
+                        maxCount = tagCounts[tagName];
+                        recordTagName = tagName;
+                    }
+                }
+
+                if (!recordTagName) {
+                    const rootChildren = xmlDoc.documentElement.children;
+                    if (rootChildren.length > 0) {
+                        recordTagName = rootChildren[0].tagName;
+                    } else {
+                        throw new Error("XML 檔案中找不到任何資料紀錄。");
+                    }
+                }
+
+                const records = xmlDoc.getElementsByTagName(recordTagName);
+                if (records.length === 0) {
+                    throw new Error("無法根據自動偵測找到有效的資料列。");
+                }
+
+                const dataArray = Array.from(records).map(recordNode => {
+                    const obj = {};
+                    const fields = Array.from(recordNode.children);
+                    fields.forEach(fieldNode => {
+                        obj[fieldNode.tagName] = fieldNode.textContent.trim();
+                    });
+                    return obj;
+                }).filter(obj => Object.keys(obj).length > 0);
+
+                if (dataArray.length === 0) {
+                    throw new Error("無法從 XML 檔案中提取任何有效的資料。");
+                }
+                return dataArray;
+            }
+
+            function parseCsvToObjects(csvString) {
+                const lines = csvString.trim().split(/\r\n|\n/);
+                if (lines.length === 0) {
+                    throw new Error("CSV 檔案內容為空。");
+                }
+
+                const parseLine = (line) => {
+                    const result = [];
+                    let inQuote = false;
+                    let currentField = '';
+                    for (let i = 0; i < line.length; i++) {
+                        const char = line[i];
+                        if (char === '"') {
+                            if (inQuote && i + 1 < line.length && line[i+1] === '"') {
+                                currentField += '"';
+                                i++; 
+                            } else {
+                                inQuote = !inQuote;
+                            }
+                        } else if (char === ',' && !inQuote) {
+                            result.push(currentField.trim());
+                            currentField = '';
+                        } else {
+                            currentField += char;
+                        }
+                    }
+                    result.push(currentField.trim());
+                    return result;
+                };
+
+                const headers = parseLine(lines[0]);
+                const data = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim() === '') continue;
+                    const values = parseLine(lines[i]);
+                    if (values.length !== headers.length) {
+                        console.warn(`警告：第 ${i + 1} 行的欄位數與標頭不符，已跳過。`);
+                        continue;
+                    }
+                    const obj = {};
+                    headers.forEach((header, index) => {
+                        obj[header] = values[index];
+                    });
+                    data.push(obj);
+                }
+                if (data.length === 0) {
+                    throw new Error("無法從 CSV 檔案中提取任何有效的資料。請檢查檔案格式。");
+                }
+                return data;
+            }
+
             function handleFile(file) {
                 if (!file) return;
                 const dict = translations[currentLang];
-                const isJson = file.type === 'application/json' || file.name.toLowerCase().endsWith('.json');
-                const isXml = file.type === 'application/xml' || file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml');
-                if (!isJson && !isXml) { alert(dict.fileTypeError); fileInput.value = ''; return; }
+                const fileName = file.name.toLowerCase();
+
+                const isJson = fileName.endsWith('.json');
+                const isXml = fileName.endsWith('.xml');
+                const isCsv = fileName.endsWith('.csv');
+
+                if (!isJson && !isXml && !isCsv) {
+                    alert(dict.fileTypeError);
+                    fileInput.value = '';
+                    return;
+                }
+
                 if (file.size > LARGE_FILE_THRESHOLD) {
                     const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
-                    if (!confirm(dict.largeFileConfirm(fileSizeMB))) { fileInput.value = ''; return; }
+                    if (!confirm(dict.largeFileConfirm(fileSizeMB))) {
+                        fileInput.value = '';
+                        return;
+                    }
                 }
+
                 showLoader(true);
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     setTimeout(() => {
                         try {
                             let data;
-                            if (isJson) { data = JSON.parse(event.target.result); } 
-                            else { data = parseXmlToObjects(event.target.result); }
+                            if (isJson) {
+                                data = JSON.parse(event.target.result);
+                            } else if (isXml) {
+                                data = parseXmlToObjects(event.target.result);
+                            } else if (isCsv) {
+                                data = parseCsvToObjects(event.target.result);
+                            }
+                            
                             if (!Array.isArray(data) || data.length === 0) throw new Error('檔案內容無法轉換為有效的資料列表。');
                             prepareForGeneration(data, file.name);
-                        } catch (e) { alert(dict.fileParseError(e.message)); } 
-                        finally { showLoader(false); }
+                        } catch (e) {
+                            alert(dict.fileParseError(e.message));
+                        } finally {
+                            showLoader(false);
+                        }
                     }, 10);
                 };
                 reader.onerror = () => { showLoader(false); alert(dict.fileReadError); };
                 reader.readAsText(file, 'UTF-8');
             }
+
             function prepareForGeneration(data, fileName) {
                 originalData = data;
                 mainContent.classList.add('hidden');
@@ -229,20 +443,29 @@
                 fileStatus.textContent = translations[currentLang].fileLoaded(fileName, originalData.length);
                 generateBtn.disabled = false;
             }
+
             function buildUI() {
                 showLoader(true);
                 setTimeout(() => {
                     try {
+                        if (originalData.length === 0) {
+                            throw new Error("無法從檔案中提取資料，請檢查檔案內容。");
+                        }
                         headers = Object.keys(originalData[0]);
                         sortState = { column: null, direction: 'none' };
                         searchInput.value = '';
-                        renderFilters(); updateView();
+                        renderFilters();
+                        updateView();
                         mainContent.classList.remove('hidden');
                         postLoadControls.classList.add('hidden');
-                    } catch (e) { alert(translations[currentLang].buildError(e.message)); } 
-                    finally { showLoader(false); }
+                    } catch (e) {
+                        alert(translations[currentLang].buildError(e.message));
+                    } finally {
+                        showLoader(false);
+                    }
                 }, 10);
             }
+
             function renderFilters() {
                 filterContainer.innerHTML = '';
                 const allOptionText = translations[currentLang].allOption;
@@ -257,19 +480,28 @@
                     filterContainer.appendChild(control);
                 });
             }
+
             function renderTable() {
                 tableContainer.innerHTML = '';
-                exportBtn.disabled = currentViewData.length === 0;
-                if (currentViewData.length === 0) {
+                // 統一控制所有匯出按鈕的禁用狀態
+                const isDisabled = currentViewData.length === 0;
+                exportExcelBtn.disabled = isDisabled;
+                exportCsvBtn.disabled = isDisabled;
+                exportJsonBtn.disabled = isDisabled;
+                exportXmlBtn.disabled = isDisabled;
+
+                if (isDisabled) {
                     tableContainer.innerHTML = `<p style="text-align:center; color:#999; font-style:italic;">${translations[currentLang].noData}</p>`;
                     return;
                 }
                 const table = document.createElement('table');
-                table.createTHead().insertRow(); table.createTBody();
+                table.createTHead().insertRow();
+                table.createTBody();
                 const headerRow = table.tHead.rows[0];
                 headers.forEach(header => {
                     const th = document.createElement('th');
-                    th.className = 'sortable'; th.textContent = header;
+                    th.className = 'sortable';
+                    th.textContent = header;
                     if (sortState.column === header) th.classList.add(`sort-${sortState.direction}`);
                     th.addEventListener('click', () => handleSort(header));
                     headerRow.appendChild(th);
@@ -277,19 +509,161 @@
                 currentViewData.forEach(rowObject => {
                     const row = table.tBodies[0].insertRow();
                     headers.forEach(header => {
-                        const cell = row.insertCell(); cell.textContent = rowObject[header] ?? "";
+                        const cell = row.insertCell();
+                        cell.textContent = rowObject[header] ?? "";
                     });
                 });
                 tableContainer.appendChild(table);
             }
-            // ...其他函式保持不變...
-            function parseXmlToObjects(xmlString) { const parser = new DOMParser(); const xmlDoc = parser.parseFromString(xmlString, "application/xml"); if (xmlDoc.getElementsByTagName("parsererror").length) { throw new Error("XML 檔案格式錯誤，無法解析。"); } const allTags = xmlDoc.getElementsByTagName('*'); const tagCounts = {}; for (let i = 0; i < allTags.length; i++) { const tagName = allTags[i].tagName; tagCounts[tagName] = (tagCounts[tagName] || 0) + 1; } let recordTagName = ''; let maxCount = 0; for (const tagName in tagCounts) { if (tagCounts[tagName] > 1 && tagCounts[tagName] > maxCount) { maxCount = tagCounts[tagName]; recordTagName = tagName; } } if (!recordTagName) { const rootChildren = xmlDoc.documentElement.children; if (rootChildren.length > 0) { recordTagName = rootChildren[0].tagName; } else { throw new Error("XML 檔案中找不到任何資料紀錄。"); } } const records = xmlDoc.getElementsByTagName(recordTagName); if (records.length === 0) { throw new Error("無法根據自動偵測找到有效的資料列。"); } const dataArray = Array.from(records).map(recordNode => { const obj = {}; const fields = Array.from(recordNode.children); fields.forEach(fieldNode => { obj[fieldNode.tagName] = fieldNode.textContent.trim(); }); return obj; }).filter(obj => Object.keys(obj).length > 0); if (dataArray.length === 0) { throw new Error("無法從 XML 檔案中提取任何有效的資料。"); } return dataArray; }
-            function showLoader(show) { show ? loader.classList.remove('hidden') : loader.classList.add('hidden'); }
-            function escapeHtml(unsafe) { if (typeof unsafe !== 'string') return unsafe; return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
-            function updateView() { let filteredData = [...originalData]; filterContainer.querySelectorAll('select').forEach(select => { if (select.value !== "") { const column = select.dataset.column; const value = select.value; filteredData = filteredData.filter(row => String(row[column]) === value); } }); const searchTerm = searchInput.value.toLowerCase().trim(); if (searchTerm) { filteredData = filteredData.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(searchTerm))); } currentViewData = filteredData; applySort(); renderTable(); }
-            function handleSort(column) { const currentDirection = sortState.column === column ? sortState.direction : 'none'; sortState = { column, direction: currentDirection === 'asc' ? 'desc' : 'asc' }; applySort(); renderTable(); }
-            function applySort() { const { column, direction } = sortState; if (!column) return; currentViewData.sort((a, b) => { const valA = a[column], valB = b[column]; if (valA == null) return 1; if (valB == null) return -1; const comparison = typeof valA === 'number' && typeof valB === 'number' ? valA - valB : String(valA).localeCompare(String(valB), 'zh-Hant'); return direction === 'asc' ? comparison : -comparison; }); }
-            function exportToExcel() { if (currentViewData.length === 0) return; const ws = XLSX.utils.json_to_sheet(currentViewData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "篩選結果"); XLSX.writeFile(wb, `export_${new Date().toISOString().slice(0,10)}.xlsx`); }
+
+            function showLoader(show) {
+                show ? loader.classList.remove('hidden') : loader.classList.add('hidden');
+            }
+
+            function escapeHtml(unsafe) {
+                if (typeof unsafe !== 'string') return unsafe;
+                return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+            }
+
+            function updateView() {
+                let filteredData = [...originalData];
+                filterContainer.querySelectorAll('select').forEach(select => {
+                    if (select.value !== "") {
+                        const column = select.dataset.column;
+                        const value = select.value;
+                        filteredData = filteredData.filter(row => String(row[column]) === value);
+                    }
+                });
+                const searchTerm = searchInput.value.toLowerCase().trim();
+                if (searchTerm) {
+                    filteredData = filteredData.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(searchTerm)));
+                }
+                currentViewData = filteredData;
+                applySort();
+                renderTable();
+            }
+
+            function handleSort(column) {
+                const currentDirection = sortState.column === column ? sortState.direction : 'none';
+                sortState = { column, direction: currentDirection === 'asc' ? 'desc' : 'asc' };
+                applySort();
+                renderTable();
+            }
+
+            function applySort() {
+                const { column, direction } = sortState;
+                if (!column) return;
+                currentViewData.sort((a, b) => {
+                    const valA = a[column];
+                    const valB = b[column];
+
+                    if (valA == null) return 1;
+                    if (valB == null) return -1;
+
+                    const comparison = typeof valA === 'number' && typeof valB === 'number' ? valA - valB : String(valA).localeCompare(String(valB), 'zh-Hant');
+                    return direction === 'asc' ? comparison : -comparison;
+                });
+            }
+
+            // 匯出為 Excel
+            function exportToExcel() {
+                if (currentViewData.length === 0) return;
+                const ws = XLSX.utils.json_to_sheet(currentViewData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "篩選結果");
+                XLSX.writeFile(wb, `report_${new Date().toISOString().slice(0,10)}.xlsx`);
+            }
+
+            // 匯出為 CSV
+            function exportToCsv() {
+                if (currentViewData.length === 0 || headers.length === 0) return;
+
+                // 處理特殊字元，例如逗號和引號
+                const escapeCsvField = (field) => {
+                    if (field == null) return '';
+                    let value = String(field);
+                    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                        return `"${value.replace(/"/g, '""')}"`;
+                    }
+                    return value;
+                };
+
+                const csvRows = [];
+                // 添加標頭
+                csvRows.push(headers.map(escapeCsvField).join(','));
+
+                // 添加資料行
+                currentViewData.forEach(row => {
+                    const values = headers.map(header => escapeCsvField(row[header]));
+                    csvRows.push(values.join(','));
+                });
+
+                const csvString = csvRows.join('\n');
+                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `report_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            // 匯出為 JSON
+            function exportToJson() {
+                if (currentViewData.length === 0) return;
+                const jsonString = JSON.stringify(currentViewData, null, 2); // null, 2 for pretty print
+                const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `report_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            // 匯出為 XML
+            function exportToXml() {
+                if (currentViewData.length === 0 || headers.length === 0) return;
+
+                const escapeXmlField = (field) => {
+                    if (field == null) return '';
+                    let value = String(field);
+                    return value
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&apos;");
+                };
+
+                let xmlString = '<?xml version="1.0" encoding="UTF-8"?>\n<data>\n';
+                currentViewData.forEach((rowObject, index) => {
+                    xmlString += `  <record id="${index + 1}">\n`;
+                    headers.forEach(header => {
+                        const tagName = header.replace(/[^a-zA-Z0-9_]/g, '_'); // 轉換非法 XML 標籤字元
+                        xmlString += `    <${tagName}>${escapeXmlField(rowObject[header])}</${tagName}>\n`;
+                    });
+                    xmlString += `  </record>\n`;
+                });
+                xmlString += '</data>';
+
+                const blob = new Blob([xmlString], { type: 'application/xml;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `report_${new Date().toISOString().slice(0,10)}.xml`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+            
+            // 初始化語言
+            setLanguage(currentLang);
         });
     </script>
 </body>
