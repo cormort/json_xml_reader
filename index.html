@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智慧型 JSON/XML/CSV 報表產生器</title>
+    <title>智慧型 JSON/XML/CSV/Excel 報表產生器</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         .hidden { display: none !important; }
@@ -116,13 +116,15 @@
     </div>
 
     <div class="header-container">
-        <h1 data-lang-key="pageTitle">智慧型 JSON/XML/CSV 報表產生器</h1>
+        <h1 data-lang-key="pageTitle">智慧型 JSON/XML/CSV/Excel 報表產生器</h1>
         <button id="lang-toggle-btn">English</button>
     </div>
     
     <div id="drop-area">
-        <input type="file" id="file-input" accept=".json, .xml, .csv">
-        <p data-lang-key="dropAreaPrompt">拖曳 JSON、XML 或 CSV 檔案到這裡，或點擊選擇檔案</p>
+        <!-- 修改 accept 屬性以接受 Excel 檔案 -->
+        <input type="file" id="file-input" accept=".json, .xml, .csv, .xls, .xlsx">
+        <!-- 修改提示文本 -->
+        <p data-lang-key="dropAreaPrompt">拖曳 JSON、XML、CSV 或 Excel 檔案到這裡，或點擊選擇檔案</p>
     </div>
     
     <div id="post-load-controls" class="content-box hidden">
@@ -157,22 +159,22 @@
         document.addEventListener('DOMContentLoaded', () => {
             const translations = {
                 'zh': {
-                    pageTitle: '智慧型 JSON/XML/CSV 報表產生器',
+                    pageTitle: '智慧型 JSON/XML/CSV/Excel 報表產生器', // 修改標題
                     toggleLangBtn: 'English',
-                    dropAreaPrompt: '拖曳 JSON、XML 或 CSV 檔案到這裡，或點擊選擇檔案',
+                    dropAreaPrompt: '拖曳 JSON、XML、CSV 或 Excel 檔案到這裡，或點擊選擇檔案', // 修改提示文本
                     generateBtn: '生成報表與篩選器',
                     filterTitle: '欄位篩選器',
                     tableTitle: '資料表格',
                     searchInputPlaceholder: '對篩選後的結果進行關鍵字查詢...',
                     searchBtn: '送出查詢',
-                    exportExcelBtn: '匯出為 Excel', // 修改此處：Specific Excel button text
+                    exportExcelBtn: '匯出為 Excel',
                     exportCsvBtn: '匯出為 CSV',
                     exportJsonBtn: '匯出為 JSON',
                     exportXmlBtn: '匯出為 XML',
                     loaderText: '資料處理中，請稍候...',
                     allOption: '-- 全部 --',
                     noData: '沒有符合條件的資料。',
-                    fileTypeError: '錯誤：請上傳 JSON、XML 或 CSV 格式的檔案！',
+                    fileTypeError: '錯誤：請上傳 JSON、XML、CSV 或 Excel 格式的檔案！', // 修改錯誤提示
                     largeFileConfirm: (size) => `您選擇的檔案大小為 ${size} MB，載入與處理可能需要較長時間。\n\n確定要繼續嗎？`,
                     fileParseError: (msg) => `檔案處理失敗：\n${msg}`,
                     fileReadError: '讀取檔案時發生錯誤！',
@@ -180,22 +182,22 @@
                     fileLoaded: (name, count) => `檔案 "${name}" 已成功載入 (${count} 筆資料)。`
                 },
                 'en': {
-                    pageTitle: 'Intelligent JSON/XML/CSV Report Generator',
+                    pageTitle: 'Intelligent JSON/XML/CSV/Excel Report Generator', // 修改標題
                     toggleLangBtn: '中文',
-                    dropAreaPrompt: 'Drag & drop a JSON, XML, or CSV file here, or click to select',
+                    dropAreaPrompt: 'Drag & drop a JSON, XML, CSV or Excel file here, or click to select', // 修改提示文本
                     generateBtn: 'Generate Report & Filters',
                     filterTitle: 'Column Filters',
                     tableTitle: 'Data Table',
                     searchInputPlaceholder: 'Search keyword in filtered results...',
                     searchBtn: 'Search',
-                    exportExcelBtn: 'Export to Excel', // 修改此處：Specific Excel button text
+                    exportExcelBtn: 'Export to Excel',
                     exportCsvBtn: 'Export to CSV',
                     exportJsonBtn: 'Export to JSON',
                     exportXmlBtn: 'Export to XML',
                     loaderText: 'Processing data, please wait...',
                     allOption: '-- All --',
                     noData: 'No data matches the criteria.',
-                    fileTypeError: 'Error: Please upload a JSON, XML, or CSV file!',
+                    fileTypeError: 'Error: Please upload a JSON, XML, CSV, or Excel file!', // 修改錯誤提示
                     largeFileConfirm: (size) => `The selected file is ${size} MB, which may take a long time to load and process.\n\nAre you sure you want to continue?`,
                     fileParseError: (msg) => `File processing failed:\n${msg}`,
                     fileReadError: 'An error occurred while reading the file!',
@@ -394,8 +396,9 @@
                 const isJson = fileName.endsWith('.json');
                 const isXml = fileName.endsWith('.xml');
                 const isCsv = fileName.endsWith('.csv');
+                const isExcel = fileName.endsWith('.xls') || fileName.endsWith('.xlsx'); // 新增 Excel 判斷
 
-                if (!isJson && !isXml && !isCsv) {
+                if (!isJson && !isXml && !isCsv && !isExcel) { // 更新判斷條件
                     alert(dict.fileTypeError);
                     fileInput.value = '';
                     return;
@@ -421,6 +424,10 @@
                                 data = parseXmlToObjects(event.target.result);
                             } else if (isCsv) {
                                 data = parseCsvToObjects(event.target.result);
+                            } else if (isExcel) { // 處理 Excel 檔案
+                                const workbook = XLSX.read(event.target.result, { type: 'binary' });
+                                const sheetName = workbook.SheetNames[0]; // 預設讀取第一個工作表
+                                data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
                             }
                             
                             if (!Array.isArray(data) || data.length === 0) throw new Error('檔案內容無法轉換為有效的資料列表。');
@@ -433,7 +440,13 @@
                     }, 10);
                 };
                 reader.onerror = () => { showLoader(false); alert(dict.fileReadError); };
-                reader.readAsText(file, 'UTF-8');
+                
+                // 根據檔案類型決定讀取方式
+                if (isExcel) {
+                    reader.readAsBinaryString(file); // Excel 需要以 binary 格式讀取
+                } else {
+                    reader.readAsText(file, 'UTF-8');
+                }
             }
 
             function prepareForGeneration(data, fileName) {
@@ -642,29 +655,3 @@
 
                 let xmlString = '<?xml version="1.0" encoding="UTF-8"?>\n<data>\n';
                 currentViewData.forEach((rowObject, index) => {
-                    xmlString += `  <record id="${index + 1}">\n`;
-                    headers.forEach(header => {
-                        const tagName = header.replace(/[^a-zA-Z0-9_]/g, '_'); // 轉換非法 XML 標籤字元
-                        xmlString += `    <${tagName}>${escapeXmlField(rowObject[header])}</${tagName}>\n`;
-                    });
-                    xmlString += `  </record>\n`;
-                });
-                xmlString += '</data>';
-
-                const blob = new Blob([xmlString], { type: 'application/xml;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `report_${new Date().toISOString().slice(0,10)}.xml`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }
-            
-            // 初始化語言
-            setLanguage(currentLang);
-        });
-    </script>
-</body>
-</html>
