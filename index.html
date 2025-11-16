@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智慧型 JSON/XML/CSV 檔案轉換器</title>
+    <title>智慧型 JSON/XML/CSV/Excel 報表產生器</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         .hidden { display: none !important; }
@@ -116,13 +116,13 @@
     </div>
 
     <div class="header-container">
-        <h1 data-lang-key="pageTitle">智慧型 JSON/XML/CSV 報表產生器</h1>
+        <h1 data-lang-key="pageTitle">智慧型 JSON/XML/CSV/Excel 報表產生器</h1>
         <button id="lang-toggle-btn">English</button>
     </div>
     
     <div id="drop-area">
-        <input type="file" id="file-input" accept=".json, .xml, .csv">
-        <p data-lang-key="dropAreaPrompt">拖曳 JSON、XML 或 CSV 檔案到這裡，或點擊選擇檔案</p>
+        <input type="file" id="file-input" accept=".json, .xml, .csv, .xls, .xlsx">
+        <p data-lang-key="dropAreaPrompt">拖曳 JSON、XML、CSV 或 Excel (.xls, .xlsx) 檔案到這裡，或點擊選擇檔案</p>
     </div>
     
     <div id="post-load-controls" class="content-box hidden">
@@ -157,22 +157,24 @@
         document.addEventListener('DOMContentLoaded', () => {
             const translations = {
                 'zh': {
-                    pageTitle: '智慧型 JSON/XML/CSV 報表產生器',
+                    pageTitle: '智慧型 JSON/XML/CSV/Excel 報表產生器',
                     toggleLangBtn: 'English',
-                    dropAreaPrompt: '拖曳 JSON、XML 或 CSV 檔案到這裡，或點擊選擇檔案',
+                    // 【修改 2】: 更新中文提示文字
+                    dropAreaPrompt: '拖曳 JSON、XML、CSV 或 Excel (.xls, .xlsx) 檔案到這裡，或點擊選擇檔案',
                     generateBtn: '生成報表與篩選器',
                     filterTitle: '欄位篩選器',
                     tableTitle: '資料表格',
                     searchInputPlaceholder: '對篩選後的結果進行關鍵字查詢...',
                     searchBtn: '送出查詢',
-                    exportExcelBtn: '匯出為 Excel', // 修改此處：Specific Excel button text
+                    exportExcelBtn: '匯出為 Excel',
                     exportCsvBtn: '匯出為 CSV',
                     exportJsonBtn: '匯出為 JSON',
                     exportXmlBtn: '匯出為 XML',
                     loaderText: '資料處理中，請稍候...',
                     allOption: '-- 全部 --',
                     noData: '沒有符合條件的資料。',
-                    fileTypeError: '錯誤：請上傳 JSON、XML 或 CSV 格式的檔案！',
+                    // 【修改 3】: 更新中文錯誤訊息
+                    fileTypeError: '錯誤：請上傳 JSON、XML、CSV 或 Excel (.xls, .xlsx) 格式的檔案！',
                     largeFileConfirm: (size) => `您選擇的檔案大小為 ${size} MB，載入與處理可能需要較長時間。\n\n確定要繼續嗎？`,
                     fileParseError: (msg) => `檔案處理失敗：\n${msg}`,
                     fileReadError: '讀取檔案時發生錯誤！',
@@ -180,22 +182,24 @@
                     fileLoaded: (name, count) => `檔案 "${name}" 已成功載入 (${count} 筆資料)。`
                 },
                 'en': {
-                    pageTitle: 'Intelligent JSON/XML/CSV Report Generator',
+                    pageTitle: 'Intelligent JSON/XML/CSV/Excel Report Generator',
                     toggleLangBtn: '中文',
-                    dropAreaPrompt: 'Drag & drop a JSON, XML, or CSV file here, or click to select',
+                    // 【修改 4】: 更新英文提示文字
+                    dropAreaPrompt: 'Drag & drop a JSON, XML, CSV, or Excel (.xls, .xlsx) file here, or click to select',
                     generateBtn: 'Generate Report & Filters',
                     filterTitle: 'Column Filters',
                     tableTitle: 'Data Table',
                     searchInputPlaceholder: 'Search keyword in filtered results...',
                     searchBtn: 'Search',
-                    exportExcelBtn: 'Export to Excel', // 修改此處：Specific Excel button text
+                    exportExcelBtn: 'Export to Excel',
                     exportCsvBtn: 'Export to CSV',
                     exportJsonBtn: 'Export to JSON',
                     exportXmlBtn: 'Export to XML',
                     loaderText: 'Processing data, please wait...',
                     allOption: '-- All --',
                     noData: 'No data matches the criteria.',
-                    fileTypeError: 'Error: Please upload a JSON, XML, or CSV file!',
+                    // 【修改 5】: 更新英文錯誤訊息
+                    fileTypeError: 'Error: Please upload a JSON, XML, CSV, or Excel (.xls, .xlsx) file!',
                     largeFileConfirm: (size) => `The selected file is ${size} MB, which may take a long time to load and process.\n\nAre you sure you want to continue?`,
                     fileParseError: (msg) => `File processing failed:\n${msg}`,
                     fileReadError: 'An error occurred while reading the file!',
@@ -386,6 +390,79 @@
                 return data;
             }
 
+            // 【新增函式】: 解析 Excel (XLS/XLSX) 檔案
+            function parseExcelToObjects(arrayBuffer) {
+                // 1. 使用 XLSX 函式庫讀取 ArrayBuffer
+                const data = new Uint8Array(arrayBuffer);
+                const wb = XLSX.read(data, { type: 'array' });
+
+                // 2. 獲取第一個工作表 (Sheet)
+                const sheetName = wb.SheetNames[0];
+                if (!sheetName) {
+                    throw new Error("Excel 檔案中找不到任何工作表。");
+                }
+                const ws = wb.Sheets[sheetName];
+
+                // 3. 將工作表轉換為「陣列的陣列」格式 (header: 1)
+                // 這樣我們才能手動尋找標題列
+                const dataRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+                if (dataRows.length === 0) {
+                    throw new Error("工作表內容為空。");
+                }
+
+                let headerRowIndex = -1;
+                let headers = [];
+
+                // 4. 【核心邏輯】: 尋找標題列
+                // 遍歷每一列，找到第一個「所有儲存格都有值」的列
+                for (let i = 0; i < dataRows.length; i++) {
+                    const row = dataRows[i];
+                    if (!row || row.length === 0) continue; // 略過空行
+
+                    // 檢查此列是否所有儲存格都有值 (不為 null, undefined 或空字串)
+                    const allFilled = row.every(cell => cell !== null && cell !== undefined && String(cell).trim() !== '');
+                    
+                    if (allFilled) {
+                        headerRowIndex = i; // 找到了！
+                        headers = row.map(cell => String(cell).trim()); // 儲存標題
+                        break; // 停止尋找
+                    }
+                }
+
+                if (headerRowIndex === -1) {
+                    throw new Error("無法在檔案中找到符合 '所有欄位都有值' 條件的標題列。");
+                }
+
+                // 5. 根據找到的標題列，建立 JSON 物件陣列
+                const jsonData = [];
+                for (let i = headerRowIndex + 1; i < dataRows.length; i++) {
+                    const row = dataRows[i];
+                    if (!row) continue; // 略過空行
+
+                    const obj = {};
+                    let hasData = false; // 檢查此行是否為空資料行
+                    for (let j = 0; j < headers.length; j++) {
+                        const value = row[j];
+                        obj[headers[j]] = value;
+                        if (value !== null && value !== undefined) {
+                            hasData = true;
+                        }
+                    }
+
+                    // 只有在該行至少有一個欄位有資料時才加入
+                    if (hasData) {
+                        jsonData.push(obj);
+                    }
+                }
+                
+                if (jsonData.length === 0) {
+                     throw new Error("找到了標題列，但標題列下沒有任何可讀取的資料。");
+                }
+                
+                return jsonData;
+            }
+
             function handleFile(file) {
                 if (!file) return;
                 const dict = translations[currentLang];
@@ -394,8 +471,11 @@
                 const isJson = fileName.endsWith('.json');
                 const isXml = fileName.endsWith('.xml');
                 const isCsv = fileName.endsWith('.csv');
+                // 【修改 6】: 增加 Excel 檔案判斷
+                const isExcel = fileName.endsWith('.xls') || fileName.endsWith('.xlsx');
 
-                if (!isJson && !isXml && !isCsv) {
+                // 【修改 7】: 更新檔案類型驗證
+                if (!isJson && !isXml && !isCsv && !isExcel) {
                     alert(dict.fileTypeError);
                     fileInput.value = '';
                     return;
@@ -415,12 +495,16 @@
                     setTimeout(() => {
                         try {
                             let data;
+                            // 【修改 8】: 增加 Excel 的解析分支
                             if (isJson) {
                                 data = JSON.parse(event.target.result);
                             } else if (isXml) {
                                 data = parseXmlToObjects(event.target.result);
                             } else if (isCsv) {
                                 data = parseCsvToObjects(event.target.result);
+                            } else if (isExcel) {
+                                // Excel 傳入的是 event.target.result (ArrayBuffer)
+                                data = parseExcelToObjects(event.target.result);
                             }
                             
                             if (!Array.isArray(data) || data.length === 0) throw new Error('檔案內容無法轉換為有效的資料列表。');
@@ -433,7 +517,13 @@
                     }, 10);
                 };
                 reader.onerror = () => { showLoader(false); alert(dict.fileReadError); };
-                reader.readAsText(file, 'UTF-8');
+                
+                // 【修改 9】: 根據檔案類型決定讀取方式
+                if (isExcel) {
+                    reader.readAsArrayBuffer(file); // Excel 讀取為 ArrayBuffer
+                } else {
+                    reader.readAsText(file, 'UTF-8'); // 其他檔案 (JSON, XML, CSV) 讀取為 Text
+                }
             }
 
             function prepareForGeneration(data, fileName) {
